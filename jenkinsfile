@@ -1,0 +1,77 @@
+pipeline {
+    agent any
+
+    environment {
+        // REGISTRY = "docker.io/your-docker-hub-id"
+        // IMAGE_NAME = "hwshin_app"
+        // KUBE_CONFIG = credentials('kubeconfig')  // Kubernetes 연결을 위한 자격 증명
+        GIT_REPO = 'https://github.com/hwshin77/team3-shin.git'
+        GIT_BRANCH = 'main'
+        GIT_CREDENTIAL_ID = 'sclee1115'
+        DOCKER_REGISTRY = 'k8s-vga-worker1:5000'
+        PREFIX = 'group1-team3'
+        APP = 'accounts-service-by-jenkins'
+        WORKSPACE = '/home/eva/user/group1/team3/sclee/day2/accounts-service-by-jenkins'
+        JAVA_HOME = "/jdk-21.0.5"
+        PATH = "${JAVA_HOME}/bin:${PATH}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: "${GIT_BRANCH}", url: "${GIT_REP}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh './gradlew clean build'
+            }
+        }
+
+        // stage('Docker Build & Push') {
+        //     steps {
+        //         script {
+        //             sh "docker build -t $REGISTRY/$IMAGE_NAME:latest ."
+        //             sh "docker login -u your-docker-hub-id -p your-docker-hub-password"
+        //             sh "docker push $REGISTRY/$IMAGE_NAME:latest"
+        //         }
+        //     }
+        // }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    docker.build("${DOCKER_REGISTRY}/${PREFIX}-${APP}:v${VERSION}", "--platform=linux/amd64 .")
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry("http://${DOCKER_REGISTRY}") {
+                        docker.image("${DOCKER_REGISTRY}/${PREFIX}-${APP}:v${VERSION}").push()
+                    }
+                }
+            }
+        }
+
+
+        // stage('Deploy to Kubernetes') {
+        //     steps {
+        //         script {
+        //             withKubeConfig([credentialsId: 'kubeconfig']) {
+        //                 sh 'kubectl apply -f k8s/deployment.yaml'
+        //             }
+        //         }
+        //     }
+        // }
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                // sh """ sed -i 's|image: .*|image: ${DOCKER_REGISTRY}/${PREFIX}-${APP}:v${VERSION}|' ${WORKSPACE}/k8s/accounts-deployment.yaml kubectl apply -f ${WORKSPACE}/k8s/accounts-deployment.yaml """
+                sh "kubectl apply -f accounts-deployment.yaml"
+            }
+        }
+    }
+}
